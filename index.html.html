@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chess Arena</title>
+
+<!-- Biblioteka obsługująca legalność ruchów, szach, mat i roszadę -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 15px;
+    background: #101522;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+
+h1 { margin-bottom: 5px; letter-spacing: 2px; }
+.subtitle { color: #9ba8bd; margin-top: 5px; }
+
+.game {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 22px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+
+#boardFullscreen { width: min(92vw, 560px); }
+
+#board {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    border: 5px solid #263249;
+    border-radius: 7px;
+    overflow: hidden;
+}
+
+.square {
+    aspect-ratio: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: clamp(25px, 7vw, 55px);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+.light { background: #e8dfc8; }
+.dark { background: #77916c; }
+.selected { background: #e8d45b !important; }
+.possible { box-shadow: inset 0 0 0 5px #e5c94b; }
+
+.piece {
+    font-family: "DejaVu Sans", "Segoe UI Symbol", "Arial Unicode MS", serif;
+    font-size: 1.06em;
+    line-height: 1;
+    pointer-events: auto;
+    cursor: grab;
+    display: inline-block;
+    transform: translateY(-1px);
+    filter: drop-shadow(0 2px 1px rgba(0,0,0,.35));
+}
+.white-piece {
+    color: #fffdf5;
+    -webkit-text-stroke: 1.35px #202938;
+    text-shadow: 0 2px 0 #b9c0cc, 0 3px 5px rgba(0,0,0,.65);
+}
+.black-piece {
+    color: #202632;
+    -webkit-text-stroke: 0.8px #05080d;
+    text-shadow: 0 1px 0 #687080, 0 3px 4px rgba(0,0,0,.55);
+}
+
+.panel {
+    background: #1b2434;
+    padding: 18px;
+    border-radius: 12px;
+    width: 270px;
+    text-align: left;
+}
+
+.panel h3 { margin-top: 0; }
+
+button, select {
+    width: 100%;
+    padding: 12px;
+    margin: 6px 0;
+    border: none;
+    border-radius: 7px;
+    font-size: 15px;
+}
+
+button {
+    background: #34445e;
+    color: white;
+    cursor: pointer;
+}
+button:hover { background: #465c7d; }
+select { background: #28354a; color: white; }
+
+#status {
+    background: #28354a;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+#history {
+    max-height: 220px;
+    overflow-y: auto;
+    color: #c4cede;
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+#fullscreenBtn {
+    max-width: 250px;
+    background: #236bce;
+}
+
+#fullscreenMoves {
+    display: none;
+}
+
+#boardFullscreen:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    background: #101522;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+    padding: 20px;
+}
+
+#boardFullscreen:fullscreen #board {
+    width: min(72vh, calc(100vw - 340px));
+    flex: 0 1 auto;
+}
+
+#boardFullscreen:fullscreen #fullscreenMoves {
+    display: flex;
+    flex-direction: column;
+    width: 270px;
+    height: min(72vh, 650px);
+    flex: 0 0 270px;
+    background: #1b2434;
+    border: 1px solid #34445e;
+    border-radius: 14px;
+    padding: 16px;
+    text-align: left;
+    overflow: hidden;
+}
+
+#fullscreenMoves h3 {
+    margin: 0 0 12px;
+    font-size: 18px;
+}
+
+#fullscreenHistory {
+    overflow-y: auto;
+    color: #d7e0ef;
+    font-size: 15px;
+    line-height: 1.9;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 700px) {
+    #boardFullscreen:fullscreen {
+        flex-direction: column;
+        gap: 10px;
+        padding: 8px;
+    }
+    #boardFullscreen:fullscreen #board {
+        width: min(68vh, 94vw);
+        flex: 0 0 auto;
+    }
+    #boardFullscreen:fullscreen #fullscreenMoves {
+        width: min(94vw, 560px);
+        height: 22vh;
+        min-height: 90px;
+        flex: 0 0 auto;
+    }
+}
+
+@media (max-width: 650px) {
+    body { padding: 8px; }
+    #boardFullscreen { width: min(96vw, 560px); }
+    .panel { width: min(96vw, 560px); }
+}
+</style>
+</head>
+
+<body>
+<h1>♟ CHESS ARENA</h1>
+<p class="subtitle">Twoja własna gra szachowa</p>
+
+<button id="fullscreenBtn" onclick="toggleFullscreen()">⛶ PEŁNY EKRAN</button>
+
+<div class="game">
+    <div>
+        <div id="status">Ładowanie...</div>
+        <div id="boardFullscreen">
+            <div id="board"></div>
+            <aside id="fullscreenMoves">
+                <h3>📜 Historia ruchów</h3>
+                <div id="fullscreenHistory">Partia jeszcze się nie rozpoczęła</div>
+            </aside>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>⚙️ Ustawienia</h3>
+
+        <label for="colorSelect">Twój kolor:</label>
+        <select id="colorSelect">
+            <option value="random" selected>Losowy — ja lub bot</option>
+            <option value="w">Białe — ja</option>
+            <option value="b">Czarne — ja</option>
+        </select>
+
+        <label for="levelSelect">Poziom bota:</label>
+        <select id="levelSelect">
+            <option value="1">Poziom 1 — łatwy</option>
+            <option value="2">Poziom 2 — średni</option>
+            <option value="3" selected>Poziom 3 — trudny</option>
+            <option value="4">Poziom 4 — bardzo trudny</option>
+        </select>
+
+        <button onclick="newGame()">♟ Nowa partia</button>
+        <button onclick="undoMove()">↩ Cofnij ruch</button>
+
+        <h3 style="margin-top:22px">📜 Historia ruchów</h3>
+        <div id="history">Brak ruchów</div>
+    </div>
+</div>
+
+<script>
+if (typeof Chess === "undefined") {
+    document.getElementById("status").textContent =
+        "Nie udało się załadować biblioteki szachowej. Sprawdź internet i odśwież stronę.";
+    throw new Error("Chess.js nie został załadowany");
+}
+
+const game = new Chess();
+
+let playerColor = "w";
+let botColor = "b";
+let selectedSquare = null;
+let possibleMoves = [];
+let thinking = false;
+
+const boardElement = document.getElementById("board");
+
+const pieces = {
+    wk: "♔", wq: "♕", wr: "♖", wb: "♗", wn: "♘", wp: "♙",
+    bk: "♚", bq: "♛", br: "♜", bb: "♝", bn: "♞", bp: "♟"
+};
+
+function renderBoard() {
+    boardElement.innerHTML = "";
+    const position = game.board();
+
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            // Gdy grasz czarnymi, obracamy planszę tak, aby czarne były na dole.
+            const realRow = playerColor === "w" ? row : 7 - row;
+            const realCol = playerColor === "w" ? col : 7 - col;
+
+            const file = String.fromCharCode(97 + realCol);
+            const rank = String(8 - realRow);
+            const squareName = file + rank;
+            const piece = position[realRow][realCol];
+
+            const square = document.createElement("div");
+            square.className = "square " +
+                ((realRow + realCol) % 2 === 0 ? "light" : "dark");
+
+            if (selectedSquare === squareName) square.classList.add("selected");
+            if (possibleMoves.includes(squareName)) square.classList.add("possible");
+
+            if (piece) {
+                const span = document.createElement("span");
+                span.className = "piece " +
+                    (piece.color === "w" ? "white-piece" : "black-piece");
+                span.textContent = pieces[piece.color + piece.type];
+
+                // Przeciągamy samą figurę, a nie całe pole szachownicy.
+                if (piece.color === playerColor &&
+                    game.turn() === playerColor && !thinking && !game.game_over()) {
+                    span.draggable = true;
+                    span.style.cursor = "grab";
+                    span.addEventListener("dragstart", event => {
+                        event.stopPropagation();
+                        event.dataTransfer.setData("text/plain", squareName);
+                        event.dataTransfer.effectAllowed = "move";
+                    });
+                    span.addEventListener("dragend", () => {
+                        // Nie zmieniamy planszy po zakończeniu przeciągania.
+                    });
+                }
+
+                square.appendChild(span);
+            }
+
+            // Pole jest celem przeciągnięcia; jego kolor pozostaje na planszy.
+            square.addEventListener("click", () => handleSquareClick(squareName));
+            square.addEventListener("dragover", event => event.preventDefault());
+            square.addEventListener("drop", event => {
+                event.preventDefault();
+                const from = event.dataTransfer.getData("text/plain");
+                if (from) makePlayerMove(from, squareName);
+            });
+
+            boardElement.appendChild(square);
+        }
+    }
+
+    updateStatus();
+    updateHistory();
+}
+
+function makePlayerMove(from, to) {
+    if (thinking || game.game_over() || game.turn() !== playerColor) return false;
+
+    const piece = game.get(from);
+    if (!piece || piece.color !== playerColor) return false;
+
+    const move = game.move({ from: from, to: to, promotion: "q" });
+
+    if (!move) {
+        selectedSquare = from;
+        possibleMoves = game.moves({ square: from, verbose: true })
+            .map(item => item.to);
+        renderBoard();
+        return false;
+    }
+
+    selectedSquare = null;
+    possibleMoves = [];
+    renderBoard();
+    window.setTimeout(botMove, 180);
+    return true;
+}
+
+function handleSquareClick(square) {
+    if (thinking || game.game_over() || game.turn() !== playerColor) return;
+
+    const piece = game.get(square);
+
+    if (selectedSquare && possibleMoves.includes(square)) {
+        if (makePlayerMove(selectedSquare, square)) return;
+    }
+
+    if (piece && piece.color === playerColor) {
+        selectedSquare = square;
+        possibleMoves = game.moves({ square: square, verbose: true })
+            .map(move => move.to);
+    } else {
+        selectedSquare = null;
+        possibleMoves = [];
+    }
+
+    renderBoard();
+}
+
+/* SILNIK BOTA */
+function evaluateBoard() {
+    const values = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
+    let score = 0;
+
+    game.board().forEach(row => {
+        row.forEach(piece => {
+            if (!piece) return;
+            score += piece.color === botColor ? values[piece.type] : -values[piece.type];
+        });
+    });
+
+    return score;
+}
+
+function minimax(depth, alpha, beta, maximizing) {
+    if (depth === 0 || game.game_over()) {
+        if (game.in_checkmate()) {
+            return game.turn() === botColor ? -100000 : 100000;
+        }
+        return evaluateBoard();
+    }
+
+    const moves = game.moves();
+
+    if (maximizing) {
+        let best = -Infinity;
+        for (const move of moves) {
+            game.move(move);
+            const score = minimax(depth - 1, alpha, beta, false);
+            game.undo();
+            best = Math.max(best, score);
+            alpha = Math.max(alpha, score);
+            if (beta <= alpha) break;
+        }
+        return best;
+    } else {
+        let best = Infinity;
+        for (const move of moves) {
+            game.move(move);
+            const score = minimax(depth - 1, alpha, beta, true);
+            game.undo();
+            best = Math.min(best, score);
+            beta = Math.min(beta, score);
+            if (beta <= alpha) break;
+        }
+        return best;
+    }
+}
+
+function chooseBotMove() {
+    const level = Number(document.getElementById("levelSelect").value);
+    const depth = level === 1 ? 1 : level === 2 ? 2 : level === 3 ? 2 : 3;
+    const moves = game.moves();
+
+    let bestScore = -Infinity;
+    let bestMoves = [];
+
+    for (const move of moves) {
+        game.move(move);
+        // Po ruchu bota kolej na przeciwnika, więc minimax zaczyna od minimalizacji.
+        const score = minimax(depth - 1, -Infinity, Infinity, false);
+        game.undo();
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestMoves = [move];
+        } else if (score === bestScore) {
+            bestMoves.push(move);
+        }
+    }
+
+    if (!bestMoves.length) return null;
+    return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+}
+
+function botMove() {
+    if (game.game_over() || game.turn() !== botColor) {
+        renderBoard();
+        return;
+    }
+
+    thinking = true;
+    updateStatus();
+
+    window.setTimeout(() => {
+        const move = chooseBotMove();
+        if (move) game.move(move);
+
+        thinking = false;
+        selectedSquare = null;
+        possibleMoves = [];
+        renderBoard();
+    }, 100);
+}
+
+/* STATUS */
+function updateStatus() {
+    const status = document.getElementById("status");
+
+    if (thinking) {
+        status.textContent = "🤖 Bot myśli...";
+    } else if (game.in_checkmate()) {
+        status.textContent = game.turn() === playerColor
+            ? "♟ Szach-mat! Bot wygrywa."
+            : "🏆 Szach-mat! Wygrywasz!";
+    } else if (game.in_draw()) {
+        status.textContent = "🤝 Remis!";
+    } else if (game.in_check()) {
+        status.textContent = game.turn() === playerColor
+            ? "⚠️ Szach! Twój ruch."
+            : "⚠️ Bot jest szachowany.";
+    } else {
+        status.textContent = game.turn() === playerColor ? "Twój ruch" : "Ruch bota";
+    }
+}
+
+/* HISTORIA */
+function updateHistory() {
+    const history = game.history();
+    const element = document.getElementById("history");
+
+    if (!history.length) {
+        element.textContent = "Brak ruchów";
+        const fullscreenHistory = document.getElementById("fullscreenHistory");
+        if (fullscreenHistory) fullscreenHistory.textContent = "Partia jeszcze się nie rozpoczęła";
+        return;
+    }
+
+    let output = "";
+    for (let i = 0; i < history.length; i += 2) {
+        output += (Math.floor(i / 2) + 1) + ". " + history[i];
+        if (history[i + 1]) output += " " + history[i + 1];
+        output += "<br>";
+    }
+    element.innerHTML = output;
+
+    const fullscreenHistory = document.getElementById("fullscreenHistory");
+    if (fullscreenHistory) {
+        fullscreenHistory.innerHTML = output;
+        fullscreenHistory.scrollTop = fullscreenHistory.scrollHeight;
+    }
+}
+
+/* NOWA PARTIA */
+function newGame() {
+    game.reset();
+
+    const chosenColor = document.getElementById("colorSelect").value;
+    playerColor = chosenColor === "random"
+        ? (Math.random() < 0.5 ? "w" : "b")
+        : chosenColor;
+
+    botColor = playerColor === "w" ? "b" : "w";
+    selectedSquare = null;
+    possibleMoves = [];
+    thinking = false;
+
+    renderBoard();
+
+    if (playerColor === "b") {
+        window.setTimeout(botMove, 250);
+    }
+}
+
+/* COFANIE: usuwa ostatnią parę ruchów (ruch gracza i odpowiedź bota). */
+function undoMove() {
+    if (thinking || game.history().length === 0) return;
+
+    game.undo(); // ostatni ruch
+    if (game.history().length > 0) game.undo(); // poprzedni ruch, jeśli istnieje
+
+    selectedSquare = null;
+    possibleMoves = [];
+    thinking = false;
+    renderBoard();
+}
+
+/* PEŁNY EKRAN */
+function toggleFullscreen() {
+    const element = document.getElementById("boardFullscreen");
+
+    if (!document.fullscreenElement) {
+        element.requestFullscreen().catch(error => console.error(error));
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+document.addEventListener("fullscreenchange", renderBoard);
+
+// Uruchomienie: domyślnie zaczynamy nową partię z losowym kolorem.
+newGame();
+</script>
+</body>
+</html>
